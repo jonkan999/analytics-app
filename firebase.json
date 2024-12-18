@@ -1,0 +1,7 @@
+{
+  "hosting": {
+    "site": "aggregatory-running-dashboard",
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  }
+}
