@@ -44,10 +44,14 @@ docker push gcr.io/$your_project_id/$your_image_name
 
 # Step 9: Deploy to Cloud Run
 echo "Deploying to Cloud Run..."
-gcloud run deploy $your_service_name --image gcr.io/$your_project_id/$your_image_name --region europe-west3
+gcloud run deploy $your_service_name --image gcr.io/$your_project_id/$your_image_name --region europe-west3 --allow-unauthenticated
 
-# Step 10: Deploy to Firebase Hosting
-echo "Deploying to Firebase Hosting..."
-firebase deploy --only hosting
+# Step 10: Set up Cloud Scheduler to trigger the Cloud Run service daily at midnight
+echo "Setting up Cloud Scheduler..."
+gcloud scheduler jobs create http daily-analytics-job --schedule "0 0 * * *" --uri "https://$your_service_name-<random-id>-<region>.run.app/run" --http-method GET --time-zone "UTC"
 
-echo "Deployment completed successfully!"
+# Step 11: Test the Cloud Run service
+echo "Testing the Cloud Run service..."
+curl -X GET "https://$your_service_name-<random-id>-<region>.run.app/run"
+
+echo "Deployment and setup completed successfully!"
