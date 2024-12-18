@@ -7,6 +7,8 @@ set -e
 your_project_id="aggregatory-440306"  # Replace with your actual project ID
 your_image_name="analytics-processor-job"  # Use your actual image name
 your_service_name="analytics-processor-job"  # Use your service name
+your_region="europe-west3"  # Your Cloud Run region
+your_scheduler_job_name="analytics-processor-schedule"  # Your Cloud Scheduler job name
 
 # Step 1: Authenticate with Google Cloud
 echo "Authenticating with Google Cloud..."
@@ -44,14 +46,14 @@ docker push gcr.io/$your_project_id/$your_image_name
 
 # Step 9: Deploy to Cloud Run
 echo "Deploying to Cloud Run..."
-gcloud run deploy $your_service_name --image gcr.io/$your_project_id/$your_image_name --region europe-west3 --allow-unauthenticated
+gcloud run deploy $your_service_name --image gcr.io/$your_project_id/$your_image_name --region $your_region --allow-unauthenticated
 
-# Step 10: Set up Cloud Scheduler to trigger the Cloud Run service daily at midnight
-echo "Setting up Cloud Scheduler..."
-gcloud scheduler jobs create http daily-analytics-job --schedule "0 0 * * *" --uri "https://$your_service_name-<random-id>-<region>.run.app/run" --http-method GET --time-zone "UTC"
+# Step 10: Update Cloud Scheduler to point to the new image
+echo "Updating Cloud Scheduler job..."
+gcloud scheduler jobs update http $your_scheduler_job_name --uri "https://$your_service_name-$your_region.run.app/run" --http-method POST --message-body '{}' --time-zone "UTC"
 
 # Step 11: Test the Cloud Run service
 echo "Testing the Cloud Run service..."
-curl -X GET "https://$your_service_name-<random-id>-<region>.run.app/run"
+curl -X POST "https://$your_service_name-$your_region.run.app/run"
 
 echo "Deployment and setup completed successfully!"
