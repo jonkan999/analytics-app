@@ -18,16 +18,16 @@ git push
 
 # Step 4: Build the Docker image
 echo "Building the Docker image..."
-docker build -t your-image-name .
+docker build -t analytics-processor-job .
 
 # Step 5: Push the Docker image to Google Container Registry
 echo "Pushing the Docker image to Google Container Registry..."
-docker tag your-image-name gcr.io/your-project-id/your-image-name
-docker push gcr.io/your-project-id/your-image-name
+docker tag analytics-processor-job gcr.io/aggregatory-440306/analytics-processor-job
+docker push gcr.io/aggregatory-440306/analytics-processor-job
 
 # Step 6: Deploy to Cloud Run
 echo "Deploying to Cloud Run..."
-gcloud run deploy your-service-name --image gcr.io/your-project-id/your-image-name --region europe-west3
+gcloud run deploy your-service-name --image gcr.io/aggregatory-440306/analytics-processor-job --region europe-west3
 
 # Step 7: Deploy to Firebase Hosting
 echo "Deploying to Firebase Hosting..."
