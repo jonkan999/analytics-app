@@ -44,10 +44,23 @@ class AnalyticsProcessor:
                 metrics['all']['daily'][date]['visitors'].update(daily_data['visitors'])
                 metrics['all']['daily'][date]['total_time'] += daily_data['total_time']
 
-        # Calculate growth metrics
-        self._calculate_growth(metrics['all'], period)
-        for country_metrics in metrics['by_country'].values():
-            self._calculate_growth(country_metrics, period)
+        # Calculate growth metrics only if we have enough data
+        days_needed = period * 2  # We need double the period for growth calculation
+        
+        # Check and calculate for 'all'
+        if len(metrics['all']['daily']) >= days_needed:
+            self._calculate_growth(metrics['all'], period)
+        else:
+            print(f"Insufficient data for {period}-day growth calculation (all countries). " 
+                  f"Have {len(metrics['all']['daily'])} days, need {days_needed}.")
+        
+        # Check and calculate for each country
+        for country, country_metrics in metrics['by_country'].items():
+            if len(country_metrics['daily']) >= days_needed:
+                self._calculate_growth(country_metrics, period)
+            else:
+                print(f"Insufficient data for {period}-day growth calculation ({country}). "
+                      f"Have {len(country_metrics['daily'])} days, need {days_needed}.")
 
         # Convert sets to counts and format data
         self._format_metrics(metrics)
@@ -85,6 +98,11 @@ class AnalyticsProcessor:
     def _calculate_growth(self, metrics, period):
         """Calculate rolling growth metrics"""
         dates = sorted(metrics['daily'].keys())
+        
+        # Additional check for minimum required dates
+        if len(dates) < period * 2:
+            return  # Skip growth calculation if not enough data
+        
         df = pd.DataFrame(index=dates)
         df['pageviews'] = [metrics['daily'][date]['pageviews'] for date in dates]
         
@@ -96,7 +114,12 @@ class AnalyticsProcessor:
         df['growth'] = ((df[f'rolling_{period}'] - df[f'rolling_{period}_lag']) / 
                        df[f'rolling_{period}_lag'] * 100)
         
-        metrics['growth'] = df['growth'].dropna().round(2).to_dict()
+        # Only store growth if we have valid calculations
+        growth_values = df['growth'].dropna().round(2).to_dict()
+        if growth_values:  # Only set if we have values
+            metrics['growth'] = growth_values
+        else:
+            metrics['growth'] = {}  # Empty dict if no valid growth calculations
 
     def _format_metrics(self, metrics):
         """Format metrics for storage"""

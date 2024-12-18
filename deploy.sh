@@ -68,6 +68,6 @@ gcloud run jobs execute $your_service_name --region $your_region
 
 # Step 12: Deploy to Firebase
 echo "Deploying to Firebase..."
-firebase deploy --project $firebase_project_id
+firebase deploy --only hosting
 
 echo "Deployment and setup completed successfully!"
