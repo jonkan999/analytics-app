@@ -54,7 +54,7 @@ gcloud run jobs update $your_service_name \
 
 # Step 10: Update Cloud Scheduler to point to the new job
 echo "Updating Cloud Scheduler job..."
-gcloud scheduler jobs create http $your_scheduler_job_name \
+gcloud scheduler jobs update http $your_scheduler_job_name \
     --schedule="0 0 * * *" \
     --location=$your_region \
     --uri="https://$your_region-run.googleapis.com/v1/namespaces/$your_project_id/jobs/$your_service_name:run" \
