@@ -9,6 +9,7 @@ your_image_name="analytics-processor-job"  # Use your actual image name
 your_service_name="analytics-processor-job"  # Use your service name
 your_region="europe-west3"  # Your Cloud Run region
 your_scheduler_job_name="analytics-processor-schedule"  # Your Cloud Scheduler job name
+firebase_project_id="aggregatory-running-dashboard"  # Your Firebase project ID
 
 # Step 1: Authenticate with Google Cloud
 echo "Authenticating with Google Cloud..."
@@ -44,16 +45,29 @@ echo "Pushing the Docker image to Google Container Registry..."
 docker tag $your_image_name gcr.io/$your_project_id/$your_image_name
 docker push gcr.io/$your_project_id/$your_image_name
 
-# Step 9: Deploy to Cloud Run
-echo "Deploying to Cloud Run..."
-gcloud run deploy $your_service_name --image gcr.io/$your_project_id/$your_image_name --region $your_region --allow-unauthenticated
+# Step 9: Update the existing Cloud Run job with the new image
+echo "Updating Cloud Run job..."
+gcloud run jobs update $your_service_name \
+    --image gcr.io/$your_project_id/$your_image_name \
+    --region $your_region \
+    --service-account="analytics-processor-sa@aggregatory-440306.iam.gserviceaccount.com"
 
-# Step 10: Update Cloud Scheduler to point to the new image
+# Step 10: Update Cloud Scheduler to point to the new job
 echo "Updating Cloud Scheduler job..."
-gcloud scheduler jobs update http $your_scheduler_job_name --uri "https://$your_service_name-$your_region.run.app/run" --http-method POST --message-body '{}' --time-zone "UTC"
+gcloud scheduler jobs create http $your_scheduler_job_name \
+    --schedule="0 0 * * *" \
+    --location=$your_region \
+    --uri="https://$your_region-run.googleapis.com/v1/namespaces/$your_project_id/jobs/$your_service_name:run" \
+    --http-method=POST \
+    --oauth-service-account-email="analytics-processor-sa@aggregatory-440306.iam.gserviceaccount.com" \
+    --message-body='{}'  # Optional: Add an empty body if needed
 
-# Step 11: Test the Cloud Run service
-echo "Testing the Cloud Run service..."
-curl -X POST "https://$your_service_name-$your_region.run.app/run"
+# Step 11: Test the Cloud Run job
+echo "Testing the Cloud Run job..."
+gcloud run jobs execute $your_service_name --region $your_region
+
+# Step 12: Deploy to Firebase
+echo "Deploying to Firebase..."
+firebase deploy --project $firebase_project_id
 
 echo "Deployment and setup completed successfully!"
