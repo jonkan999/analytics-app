@@ -4,12 +4,14 @@
 set -e
 
 # Define your variables
-your_project_id="aggregatory-440306"  # Replace with your actual project ID
-your_image_name="analytics-processor-job"  # Use your actual image name
-your_service_name="analytics-processor-job"  # Use your service name
-your_region="europe-west3"  # Your Cloud Run region
-your_scheduler_job_name="analytics-processor-schedule"  # Your Cloud Scheduler job name
-firebase_project_id="aggregatory-running-dashboard"  # Your Firebase project ID
+your_project_id="aggregatory-440306"
+your_image_name="analytics-processor-job"
+your_service_name="analytics-processor-job"
+your_region="europe-west3"
+your_scheduler_job_name="analytics-processor-schedule"
+firebase_project_id="aggregatory-running-dashboard"
+your_service_account="analytics-processor-sa@aggregatory-440306.iam.gserviceaccount.com"
+
 
 # Step 1: Authenticate with Google Cloud
 echo "Authenticating with Google Cloud..."
@@ -54,19 +56,31 @@ gcloud run jobs update $your_service_name \
 
 # Step 10: Update Cloud Scheduler to point to the new job
 echo "Updating Cloud Scheduler job..."
-gcloud scheduler jobs update http $your_scheduler_job_name \
+gcloud scheduler jobs delete $your_scheduler_job_name --location=$your_region --quiet || true
+
+gcloud scheduler jobs create http $your_scheduler_job_name \
     --schedule="0 0 * * *" \
     --location=$your_region \
     --uri="https://$your_region-run.googleapis.com/v1/namespaces/$your_project_id/jobs/$your_service_name:run" \
     --http-method=POST \
-    --oauth-service-account-email="analytics-processor-sa@aggregatory-440306.iam.gserviceaccount.com" \
-    --message-body='{}'  # Optional: Add an empty body if needed
+    --oauth-service-account-email="$your_service_account" \
+    --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform" \
+    --message-body='{"data": {}}' \
+    --attempt-deadline=300s \
+    --time-zone="Europe/Stockholm" \
+    --max-retry-attempts=3 \
+    --headers="Content-Type=application/json" \
+    --description="Runs the analytics processor job daily at midnight Stockholm time"
 
-# Step 11: Test the Cloud Run job
+# Step 11: Verify the scheduler job configuration
+echo "Verifying scheduler job configuration..."
+gcloud scheduler jobs describe $your_scheduler_job_name --location=$your_region
+
+# Step 12: Test the Cloud Run job
 echo "Testing the Cloud Run job..."
 gcloud run jobs execute $your_service_name --region $your_region
 
-# Step 12: Deploy to Firebase
+# Step 13: Deploy to Firebase
 echo "Deploying to Firebase..."
 firebase deploy --only hosting
 
