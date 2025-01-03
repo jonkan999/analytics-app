@@ -12,7 +12,7 @@ class AnalyticsProcessor:
 
     def process_analytics(self):
         """Main processing function"""
-        countries = ['no', 'se', 'fi']  # Add more countries as needed
+        countries = ['no', 'se', 'fi', 'dk', 'de', 'nl', 'be']  # Add more countries as needed
         end_date = datetime.now()
         
         # Process for both 7 and 28 day periods

@@ -59,13 +59,13 @@ echo "Updating Cloud Scheduler job..."
 gcloud scheduler jobs delete $your_scheduler_job_name --location=$your_region --quiet || true
 
 gcloud scheduler jobs create http $your_scheduler_job_name \
-    --schedule="42 8 * * *" \
+    --schedule="49 08 * * *" \
     --location=$your_region \
     --uri="https://${your_region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${your_project_id}/jobs/${your_service_name}:run" \
     --http-method=POST \
     --oauth-service-account-email="$your_service_account" \
     --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform" \
-    --message-body='{"data": {}}' \
+    --message-body='{}' \
     --headers="Content-Type=application/json" \
     --description="Runs the analytics processor job daily at midnight Stockholm time"
 
