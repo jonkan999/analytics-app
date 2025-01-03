@@ -59,7 +59,7 @@ echo "Updating Cloud Scheduler job..."
 gcloud scheduler jobs delete $your_scheduler_job_name --location=$your_region --quiet || true
 
 gcloud scheduler jobs create http $your_scheduler_job_name \
-    --schedule="51 08 * * *" \
+    --schedule="0 23 * * *" \
     --location=$your_region \
     --uri="https://${your_region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${your_project_id}/jobs/${your_service_name}:run" \
     --http-method=POST \
