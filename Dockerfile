@@ -17,4 +17,4 @@ COPY python/ ./python/
 RUN mkdir -p ./python/keys
 
 # Set the entry point
-CMD ["python", "python/analytics_processor.py"]
+CMD python python/trending_races.py && python python/analytics_processor.py

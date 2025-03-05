@@ -1,0 +1,15 @@
+"SE":
+  race_list_name: "loppkalender"
+  race_page_name: "loppsidor"
+"NO":
+  race_list_name: "terminliste"
+  race_page_name: "lopssider"
+"DK":
+  race_list_name: "lobekalender"
+  race_page_name: "loppsider"
+"FI":
+  race_list_name: "juoksukalenteri"
+  race_page_name: "kilpailusivut"
+"EE":
+  race_list_name: "jooksuvoistlused"
+  race_page_name: "jooksulehed"
