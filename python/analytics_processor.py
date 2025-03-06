@@ -71,29 +71,93 @@ class AnalyticsProcessor:
 
     def _process_country(self, country, start_date, end_date):
         """Process data for a single country"""
-        docs = self.db.collection(f'pageViews_{country}')\
-            .where('visitedTimestamp', '>=', start_date)\
-            .where('visitedTimestamp', '<=', end_date)\
-            .get()
-
+        print(f"Processing data for {country} from {start_date} to {end_date}")
+        
+        # Don't use where clauses initially - we'll filter in memory after fetching
+        # This helps us handle both string and timestamp fields
+        docs = self.db.collection(f'pageViews_{country}').get()
+        
+        print(f"Retrieved {len(list(docs))} documents for {country}")
+        
         daily_metrics = {}
+        processed_count = 0
+        skipped_count = 0
         
         for doc in docs:
-            data = doc.to_dict()
-            date = data['visitedTimestamp'].date().isoformat()
-            
-            if date not in daily_metrics:
-                daily_metrics[date] = {
-                    'pageviews': 0,
-                    'visitors': set(),
-                    'total_time': 0
-                }
-            
-            daily_metrics[date]['pageviews'] += 1
-            visitor_id = data.get('dailyId', 'unknown-' + doc.id)
-            daily_metrics[date]['visitors'].add(visitor_id)
-            daily_metrics[date]['total_time'] += data.get('timeOnPage', 0)
-
+            try:
+                data = doc.to_dict()
+                
+                # Handle different timestamp field formats
+                timestamp = None
+                if 'visitedTimestamp' in data:
+                    if isinstance(data['visitedTimestamp'], str):
+                        # Parse string format
+                        try:
+                            timestamp = datetime.fromisoformat(data['visitedTimestamp'].replace('Z', '+00:00'))
+                        except ValueError:
+                            print(f"Could not parse timestamp string: {data['visitedTimestamp']}")
+                            skipped_count += 1
+                            continue
+                    else:
+                        # Already a timestamp object
+                        timestamp = data['visitedTimestamp']
+                elif 'timestamp' in data:
+                    timestamp = data['timestamp']
+                
+                # Skip if no valid timestamp or outside our range
+                if not timestamp or timestamp < start_date or timestamp > end_date:
+                    skipped_count += 1
+                    continue
+                    
+                # Convert to date string
+                date = timestamp.date().isoformat()
+                
+                if date not in daily_metrics:
+                    daily_metrics[date] = {
+                        'pageviews': 0,
+                        'visitors': set(),
+                        'total_time': 0
+                    }
+                
+                # Increment page view count
+                daily_metrics[date]['pageviews'] += 1
+                
+                # Handle dailyId in various formats
+                visitor_id = None
+                if 'dailyId' in data:
+                    if data['dailyId'] == "null" or data['dailyId'] is None:
+                        visitor_id = 'unknown-' + doc.id
+                    else:
+                        visitor_id = data['dailyId']
+                else:
+                    visitor_id = 'unknown-' + doc.id
+                    
+                daily_metrics[date]['visitors'].add(visitor_id)
+                
+                # Handle timeOnPage in various formats
+                time_on_page = 0
+                if 'timeOnPage' in data:
+                    if isinstance(data['timeOnPage'], str):
+                        try:
+                            time_on_page = float(data['timeOnPage'])
+                        except ValueError:
+                            time_on_page = 0
+                    else:
+                        time_on_page = data['timeOnPage']
+                        
+                daily_metrics[date]['total_time'] += time_on_page
+                processed_count += 1
+                
+            except Exception as e:
+                print(f"Error processing document {doc.id}: {str(e)}")
+                skipped_count += 1
+        
+        print(f"Country {country}: Processed {processed_count} documents, skipped {skipped_count}")
+        print(f"Country {country}: Found data for {len(daily_metrics)} unique days")
+        
+        if len(daily_metrics) == 0:
+            print(f"WARNING: No data found for {country} in the specified date range")
+        
         return {'daily': daily_metrics}
 
     def _calculate_growth(self, metrics, period):
