@@ -72,15 +72,15 @@ class AnalyticsProcessor:
     def _process_country(self, country, start_date, end_date):
         """Process data for a single country"""
         docs = self.db.collection(f'pageViews_{country}')\
-            .where('timestamp', '>=', start_date)\
-            .where('timestamp', '<=', end_date)\
+            .where('visitedTimestamp', '>=', start_date)\
+            .where('visitedTimestamp', '<=', end_date)\
             .get()
 
         daily_metrics = {}
         
         for doc in docs:
             data = doc.to_dict()
-            date = data['timestamp'].date().isoformat()
+            date = data['visitedTimestamp'].date().isoformat()
             
             if date not in daily_metrics:
                 daily_metrics[date] = {
@@ -90,7 +90,8 @@ class AnalyticsProcessor:
                 }
             
             daily_metrics[date]['pageviews'] += 1
-            daily_metrics[date]['visitors'].add(data['dailyId'])
+            visitor_id = data.get('dailyId', 'unknown-' + doc.id)
+            daily_metrics[date]['visitors'].add(visitor_id)
             daily_metrics[date]['total_time'] += data.get('timeOnPage', 0)
 
         return {'daily': daily_metrics}
