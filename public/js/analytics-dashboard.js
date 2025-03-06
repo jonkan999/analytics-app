@@ -31,9 +31,82 @@ class DashboardUI {
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      this.currentMetrics = docSnap.data().metrics;
-      this.updateDashboard();
+      // Try to get the data in the expected format
+      const docData = docSnap.data();
+      console.log("Raw Firestore data:", docData); // Debug data structure
+
+      // Check if we have the new nested format (data.data) or just data directly
+      let rawData = docData.data;
+
+      // Check which data structure we have and normalize it
+      if (rawData) {
+        console.log("Raw data structure:", rawData);
+
+        // If we already have the expected format with 'all' and 'by_country'
+        if (rawData.all && rawData.by_country) {
+          this.currentMetrics = rawData;
+        }
+        // If we have just country data without the wrapper
+        else if (
+          !rawData.all &&
+          Object.keys(rawData).some((key) => rawData[key].daily)
+        ) {
+          // Create the expected structure
+          this.currentMetrics = {
+            all: this._aggregateAllCountries(rawData),
+            by_country: rawData,
+          };
+        }
+        // Something else entirely
+        else {
+          console.error("Unexpected data format:", rawData);
+          this.showError("Data format error. Please check the console.");
+          return;
+        }
+
+        console.log("Processed metrics:", this.currentMetrics);
+        this.updateDashboard();
+      } else {
+        console.error("No data found in the document");
+        this.showError("No data available");
+      }
+    } else {
+      console.error("Document not found");
+      this.showError("Analytics data not found");
     }
+  }
+
+  // Helper method to aggregate country data in the frontend if needed
+  _aggregateAllCountries(countryData) {
+    console.log("Aggregating country data on frontend");
+    const allMetrics = { daily: {} };
+
+    // Combine data from all countries
+    Object.values(countryData).forEach((country) => {
+      if (!country.daily) return;
+
+      Object.entries(country.daily).forEach(([date, metrics]) => {
+        if (!allMetrics.daily[date]) {
+          allMetrics.daily[date] = {
+            pageviews: 0,
+            unique_visitors: 0,
+            total_time: 0,
+          };
+        }
+
+        allMetrics.daily[date].pageviews += metrics.pageviews;
+        allMetrics.daily[date].unique_visitors += metrics.unique_visitors;
+        allMetrics.daily[date].total_time += metrics.total_time;
+      });
+    });
+
+    return allMetrics;
+  }
+
+  // Add this helper method
+  showError(message) {
+    const container = document.getElementById("dashboard-container");
+    container.innerHTML = `<div class="error-message">${message}</div>`;
   }
 
   updateDashboard() {
