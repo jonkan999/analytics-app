@@ -73,8 +73,7 @@ class AnalyticsProcessor:
         """Process data for a single country"""
         print(f"Processing data for {country} from {start_date} to {end_date}")
         
-        # Don't use where clauses initially - we'll filter in memory after fetching
-        # This helps us handle both string and timestamp fields
+        # Get all documents without filtering first
         docs = self.db.collection(f'pageViews_{country}').get()
         
         print(f"Retrieved {len(list(docs))} documents for {country}")
@@ -87,66 +86,70 @@ class AnalyticsProcessor:
             try:
                 data = doc.to_dict()
                 
-                # Handle different timestamp field formats
+                # Print sample document to debug
+                if processed_count == 0:
+                    print(f"Sample document structure: {data.keys()}")
+                
+                # Handle visitedTimestamp in various formats
                 timestamp = None
-                if 'visitedTimestamp' in data:
-                    if isinstance(data['visitedTimestamp'], str):
-                        # Parse string format
-                        try:
-                            timestamp = datetime.fromisoformat(data['visitedTimestamp'].replace('Z', '+00:00'))
-                        except ValueError:
-                            print(f"Could not parse timestamp string: {data['visitedTimestamp']}")
-                            skipped_count += 1
-                            continue
-                    else:
-                        # Already a timestamp object
-                        timestamp = data['visitedTimestamp']
-                elif 'timestamp' in data:
-                    timestamp = data['timestamp']
-                
-                # Skip if no valid timestamp or outside our range
-                if not timestamp or timestamp < start_date or timestamp > end_date:
-                    skipped_count += 1
-                    continue
+                try:
+                    # Try different timestamp formats
+                    if 'visitedTimestamp' in data:
+                        if isinstance(data['visitedTimestamp'], str):
+                            # Remove the 'Z' and add timezone info
+                            timestamp_str = data['visitedTimestamp'].replace('Z', '+00:00')
+                            timestamp = datetime.fromisoformat(timestamp_str)
+                        else:
+                            timestamp = data['visitedTimestamp']
+                    elif 'timestamp' in data:
+                        if isinstance(data['timestamp'], str):
+                            timestamp = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
+                        else:
+                            timestamp = data['timestamp']
                     
-                # Convert to date string
-                date = timestamp.date().isoformat()
-                
-                if date not in daily_metrics:
-                    daily_metrics[date] = {
-                        'pageviews': 0,
-                        'visitors': set(),
-                        'total_time': 0
-                    }
-                
-                # Increment page view count
-                daily_metrics[date]['pageviews'] += 1
-                
-                # Handle dailyId in various formats
-                visitor_id = None
-                if 'dailyId' in data:
-                    if data['dailyId'] == "null" or data['dailyId'] is None:
-                        visitor_id = 'unknown-' + doc.id
-                    else:
-                        visitor_id = data['dailyId']
-                else:
+                    # Skip if outside our date range
+                    if not timestamp or timestamp < start_date or timestamp > end_date:
+                        skipped_count += 1
+                        continue
+                    
+                    # Convert to date string
+                    date = timestamp.date().isoformat()
+                    
+                    if date not in daily_metrics:
+                        daily_metrics[date] = {
+                            'pageviews': 0,
+                            'visitors': set(),
+                            'total_time': 0
+                        }
+                    
+                    # Increment page view count
+                    daily_metrics[date]['pageviews'] += 1
+                    
+                    # Process visitor ID
                     visitor_id = 'unknown-' + doc.id
+                    if 'dailyId' in data:
+                        if data['dailyId'] != "null" and data['dailyId'] is not None:
+                            visitor_id = str(data['dailyId'])
                     
-                daily_metrics[date]['visitors'].add(visitor_id)
-                
-                # Handle timeOnPage in various formats
-                time_on_page = 0
-                if 'timeOnPage' in data:
-                    if isinstance(data['timeOnPage'], str):
+                    daily_metrics[date]['visitors'].add(visitor_id)
+                    
+                    # Process time on page
+                    time_on_page = 0
+                    if 'timeOnPage' in data:
                         try:
-                            time_on_page = float(data['timeOnPage'])
-                        except ValueError:
+                            if isinstance(data['timeOnPage'], str):
+                                time_on_page = float(data['timeOnPage'])
+                            else:
+                                time_on_page = float(data['timeOnPage'])
+                        except (ValueError, TypeError):
                             time_on_page = 0
-                    else:
-                        time_on_page = data['timeOnPage']
-                        
-                daily_metrics[date]['total_time'] += time_on_page
-                processed_count += 1
+                    
+                    daily_metrics[date]['total_time'] += time_on_page
+                    processed_count += 1
+                    
+                except Exception as e:
+                    print(f"Error processing timestamp for doc {doc.id}: {str(e)}")
+                    skipped_count += 1
                 
             except Exception as e:
                 print(f"Error processing document {doc.id}: {str(e)}")
@@ -155,8 +158,10 @@ class AnalyticsProcessor:
         print(f"Country {country}: Processed {processed_count} documents, skipped {skipped_count}")
         print(f"Country {country}: Found data for {len(daily_metrics)} unique days")
         
-        if len(daily_metrics) == 0:
-            print(f"WARNING: No data found for {country} in the specified date range")
+        # Check for recent data
+        recent_dates = [date for date in daily_metrics.keys() 
+                       if datetime.fromisoformat(date) > (datetime.now() - timedelta(days=30))]
+        print(f"Country {country}: Recent dates (last 30 days): {recent_dates}")
         
         return {'daily': daily_metrics}
 
