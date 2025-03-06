@@ -70,15 +70,16 @@ class AnalyticsProcessor:
         try:
             # Store the timestamp of when this data was processed
             timestamp = datetime.now()
+            timestamp_str = timestamp.strftime('%Y-%m-%d_%H%M%S')
             
-            # Create document with processed data
-            doc_ref = self.db.collection('processed_analytics').document(timestamp.strftime('%Y-%m-%d_%H%M%S'))
-            doc_ref.set({
+            # Update the "latest" document to always point to most recent data
+            latest_ref = self.db.collection('processed_analytics').document('latest')
+            latest_ref.set({
                 'timestamp': timestamp,
                 'data': results
             })
+            self.log.info(f"Updated 'latest' document with most recent data")
             
-            self.log.info(f"Stored results in processed_analytics/{timestamp.strftime('%Y-%m-%d_%H%M%S')}")
         except Exception as e:
             self.log.error(f"Error storing results: {e}")
 
