@@ -5,7 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 import { firebaseInit } from "./firebaseConfig.js"; // Adjust the path as needed
 
-// Fix for Plotly access in module
+// Simply access Plotly directly from window
 const Plotly = window.Plotly;
 
 class DashboardUI {
@@ -249,17 +249,37 @@ class DashboardUI {
     `;
   }
 
-  updateCharts(data, yesterdayStr) {
+  async updateCharts(data, yesterdayStr) {
+    console.log("Starting chart update with data:", data);
+    console.log("Yesterday is:", yesterdayStr);
+
+    // Verify Plotly is available
+    if (!window.Plotly) {
+      console.error("Plotly is not available in the global scope!");
+      return;
+    }
+
     // Filter and sort dates up to yesterday
     const dates = Object.keys(data.daily)
       .filter((date) => date <= yesterdayStr)
       .sort();
 
+    console.log(`Found ${dates.length} dates to plot`);
+
+    if (dates.length === 0) {
+      console.error("No dates available for plotting");
+      return;
+    }
+
+    // Extract data series with fallbacks
     const pageviews = dates.map((date) => data.daily[date].pageviews || 0);
     const rolling7day = dates.map((date) => data.daily[date].rolling_7 || 0);
     const rolling28day = dates.map((date) => data.daily[date].rolling_28 || 0);
     const growth7day = dates.map((date) => data.daily[date].growth_7 || 0);
     const growth28day = dates.map((date) => data.daily[date].growth_28 || 0);
+
+    console.log("Latest pageviews:", pageviews.slice(-5));
+    console.log("Latest 7-day rolling:", rolling7day.slice(-5));
 
     // Common layout and config settings
     const layout = {
@@ -274,127 +294,139 @@ class DashboardUI {
       responsive: true,
     };
 
-    // Daily Pageviews Chart
-    Plotly.newPlot(
-      "trendChart",
-      [
+    // Try to render each chart with error handling
+    try {
+      // Daily Pageviews Chart
+      window.Plotly.newPlot(
+        "trendChart",
+        [
+          {
+            x: dates,
+            y: pageviews,
+            type: "scatter",
+            mode: "lines+markers",
+            name: "Pageviews",
+            line: { shape: "linear" },
+          },
+        ],
         {
-          x: dates,
-          y: pageviews,
-          type: "scatter",
-          mode: "lines+markers",
-          name: "Pageviews",
-          line: { shape: "linear" },
-        },
-      ],
-      {
-        ...layout,
-        title: {
-          text: "Daily Pageviews",
-          y: 0.95,
-        },
-      },
-      config
-    );
-
-    // Rolling 7-day Chart
-    Plotly.newPlot(
-      "uniqueVisitorsChart",
-      [
-        {
-          x: dates,
-          y: rolling7day,
-          type: "scatter",
-          mode: "lines+markers",
-          name: "7-day Rolling",
-          line: { shape: "linear" },
-        },
-      ],
-      {
-        ...layout,
-        title: {
-          text: "7-day Rolling Pageviews",
-          y: 0.95,
-        },
-      },
-      config
-    );
-
-    // Rolling 28-day Chart
-    Plotly.newPlot(
-      "avgTimePerPageviewChart",
-      [
-        {
-          x: dates,
-          y: rolling28day,
-          type: "scatter",
-          mode: "lines+markers",
-          name: "28-day Rolling",
-          line: { shape: "linear" },
-        },
-      ],
-      {
-        ...layout,
-        title: {
-          text: "28-day Rolling Pageviews",
-          y: 0.95,
-        },
-      },
-      config
-    );
-
-    // Growth 7-day Chart
-    Plotly.newPlot(
-      "avgTimePerVisitorChart",
-      [
-        {
-          x: dates,
-          y: growth7day,
-          type: "bar",
-          name: "7-day Growth %",
-          marker: {
-            color: growth7day.map((val) =>
-              val > 0 ? "rgba(0, 128, 0, 0.7)" : "rgba(255, 0, 0, 0.7)"
-            ),
+          ...layout,
+          title: {
+            text: "Daily Pageviews",
+            y: 0.95,
           },
         },
-      ],
-      {
-        ...layout,
-        title: {
-          text: "7-day Growth Rate (%)",
-          y: 0.95,
-        },
-      },
-      config
-    );
+        config
+      );
+      console.log("Daily pageviews chart rendered");
 
-    // Growth 28-day Chart
-    Plotly.newPlot(
-      "growthChart",
-      [
+      // Rolling 7-day Chart
+      window.Plotly.newPlot(
+        "uniqueVisitorsChart",
+        [
+          {
+            x: dates,
+            y: rolling7day,
+            type: "scatter",
+            mode: "lines+markers",
+            name: "7-day Rolling",
+            line: { shape: "linear" },
+          },
+        ],
         {
-          x: dates,
-          y: growth28day,
-          type: "bar",
-          name: "28-day Growth %",
-          marker: {
-            color: growth28day.map((val) =>
-              val > 0 ? "rgba(0, 128, 0, 0.7)" : "rgba(255, 0, 0, 0.7)"
-            ),
+          ...layout,
+          title: {
+            text: "7-day Rolling Pageviews",
+            y: 0.95,
           },
         },
-      ],
-      {
-        ...layout,
-        title: {
-          text: "28-day Growth Rate (%)",
-          y: 0.95,
+        config
+      );
+      console.log("7-day rolling chart rendered");
+
+      // Rolling 28-day Chart
+      window.Plotly.newPlot(
+        "avgTimePerPageviewChart",
+        [
+          {
+            x: dates,
+            y: rolling28day,
+            type: "scatter",
+            mode: "lines+markers",
+            name: "28-day Rolling",
+            line: { shape: "linear" },
+          },
+        ],
+        {
+          ...layout,
+          title: {
+            text: "28-day Rolling Pageviews",
+            y: 0.95,
+          },
         },
-      },
-      config
-    );
+        config
+      );
+      console.log("28-day rolling chart rendered");
+
+      // Growth 7-day Chart
+      window.Plotly.newPlot(
+        "avgTimePerVisitorChart",
+        [
+          {
+            x: dates,
+            y: growth7day,
+            type: "bar",
+            name: "7-day Growth %",
+            marker: {
+              color: growth7day.map((val) =>
+                val > 0 ? "rgba(0, 128, 0, 0.7)" : "rgba(255, 0, 0, 0.7)"
+              ),
+            },
+          },
+        ],
+        {
+          ...layout,
+          title: {
+            text: "7-day Growth Rate (%)",
+            y: 0.95,
+          },
+        },
+        config
+      );
+      console.log("7-day growth chart rendered");
+
+      // Growth 28-day Chart
+      window.Plotly.newPlot(
+        "growthChart",
+        [
+          {
+            x: dates,
+            y: growth28day,
+            type: "bar",
+            name: "28-day Growth %",
+            marker: {
+              color: growth28day.map((val) =>
+                val > 0 ? "rgba(0, 128, 0, 0.7)" : "rgba(255, 0, 0, 0.7)"
+              ),
+            },
+          },
+        ],
+        {
+          ...layout,
+          title: {
+            text: "28-day Growth Rate (%)",
+            y: 0.95,
+          },
+        },
+        config
+      );
+      console.log("28-day growth chart rendered");
+    } catch (err) {
+      console.error("Error rendering charts:", err);
+    }
   }
 }
 
+// Initialize the dashboard when the script loads
+console.log("Dashboard script loaded");
 new DashboardUI();
