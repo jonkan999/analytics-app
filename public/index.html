@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.30.0/plotly.min.js"></script>
     <link
       href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
       rel="stylesheet"
@@ -68,7 +68,7 @@
     <div class="container mx-auto px-4 py-8">
       <div class="flex flex-col md:flex-row justify-between items-center mb-8">
         <div>
-          <h1 class="text-3xl font-bold mb-2">Analytics Dashboard</h1>
+          <h1 class="text-3xl font-bold mb-2">Pageviews Dashboard</h1>
           <div id="cutoffDate" class="text-gray-600 text-sm"></div>
         </div>
         <div class="w-full md:w-auto mt-4 md:mt-0">
@@ -81,35 +81,47 @@
             <option value="se">Sweden</option>
             <option value="fi">Finland</option>
             <option value="dk">Denmark</option>
-            <option value="de">Germany</option>
-            <option value="nl">Netherlands</option>
-            <option value="be">Belgium</option>
+            <option value="ee">Estonia</option>
           </select>
         </div>
       </div>
 
       <!-- Metric Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div id="pageviews" class="bg-white p-6 rounded-lg shadow"></div>
-        <div id="visitors" class="bg-white p-6 rounded-lg shadow"></div>
-        <div id="timeOnSite" class="bg-white p-6 rounded-lg shadow"></div>
+        <div
+          id="pageviews"
+          class="bg-white p-6 rounded-lg shadow metric-card"
+        ></div>
+        <div
+          id="visitors"
+          class="bg-white p-6 rounded-lg shadow metric-card"
+        ></div>
+        <div
+          id="timeOnSite"
+          class="bg-white p-6 rounded-lg shadow metric-card"
+        ></div>
       </div>
 
       <!-- Charts -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="chart-box bg-white p-6 rounded-lg shadow">
+          <h3 class="text-lg font-semibold mb-2">Daily Pageviews</h3>
           <div id="trendChart" class="chart-container"></div>
         </div>
         <div class="chart-box bg-white p-6 rounded-lg shadow">
+          <h3 class="text-lg font-semibold mb-2">7-day Rolling Pageviews</h3>
           <div id="uniqueVisitorsChart" class="chart-container"></div>
         </div>
         <div class="chart-box bg-white p-6 rounded-lg shadow">
+          <h3 class="text-lg font-semibold mb-2">28-day Rolling Pageviews</h3>
           <div id="avgTimePerPageviewChart" class="chart-container"></div>
         </div>
         <div class="chart-box bg-white p-6 rounded-lg shadow">
+          <h3 class="text-lg font-semibold mb-2">7-day Growth Rate (%)</h3>
           <div id="avgTimePerVisitorChart" class="chart-container"></div>
         </div>
         <div class="chart-box bg-white p-6 rounded-lg shadow">
+          <h3 class="text-lg font-semibold mb-2">28-day Growth Rate (%)</h3>
           <div id="growthChart" class="chart-container"></div>
         </div>
       </div>

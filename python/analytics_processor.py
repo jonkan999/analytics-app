@@ -33,16 +33,14 @@ class AnalyticsProcessor:
         self.db = firestore.client()
         self.log.info("Analytics processor initialized")
 
-    def process_analytics(self, countries=None, days=30):
+    def process_analytics(self, days=30):
         """Process analytics data for specified countries and time period
         
         Args:
-            countries: List of country codes to process (default: all countries)
             days: Number of days to process (default: 30)
         """
-        if not countries:
-            # Default list of countries to process
-            countries = ['se', 'no', 'dk', 'fi', 'nl', 'be', 'de']
+        # Focus on Nordic countries + Estonia
+        countries = ['se', 'no', 'dk', 'fi', 'ee']
         
         # Calculate date range
         end_date = datetime.now()
@@ -93,8 +91,8 @@ class AnalyticsProcessor:
             self.log.error(f"Error storing results: {e}")
 
     def _aggregate_all_countries(self, country_results):
-        """Aggregate metrics from all countries into a single result"""
-        self.log.info("Aggregating metrics from all countries")
+        """Aggregate pageviews from all countries into a single result"""
+        self.log.info("Aggregating pageviews from all countries")
         
         all_metrics = {'daily': {}}
         dates_seen = set()
@@ -109,22 +107,75 @@ class AnalyticsProcessor:
         for date in dates_seen:
             all_metrics['daily'][date] = {
                 'pageviews': 0,
-                'unique_visitors': 0,
-                'total_time': 0
+                'rolling_7': 0,
+                'rolling_28': 0,
+                'growth_7': 0,
+                'growth_28': 0
             }
         
-        # Aggregate metrics from each country
+        # Log country counts for debugging
+        for country, result in country_results.items():
+            if 'daily' in result:
+                daily_sum = sum(metrics.get('pageviews', 0) for metrics in result['daily'].values())
+                self.log.info(f"Country {country}: {daily_sum} total pageviews")
+        
+        # Aggregate pageviews from each country
         for country, result in country_results.items():
             if 'daily' not in result:
                 continue
             
             for date, metrics in result['daily'].items():
-                all_metrics['daily'][date]['pageviews'] += metrics['pageviews']
-                all_metrics['daily'][date]['unique_visitors'] += metrics['unique_visitors']
-                all_metrics['daily'][date]['total_time'] += metrics['total_time']
+                all_metrics['daily'][date]['pageviews'] += metrics.get('pageviews', 0)
         
-        self.log.info(f"Aggregated metrics for {len(dates_seen)} days across all countries")
+        # Re-calculate rolling metrics for the aggregated data
+        all_metrics = self._calculate_rolling_metrics(all_metrics)
+        
+        # Log the aggregated results for verification
+        total_pageviews = sum(metrics['pageviews'] for metrics in all_metrics['daily'].values())
+        self.log.info(f"Total aggregated pageviews across all countries: {total_pageviews}")
+        
         return all_metrics
+
+    def _calculate_rolling_metrics(self, metrics):
+        """Calculate rolling and growth metrics from daily pageviews"""
+        # Convert daily metrics to array of (date, pageviews) for sorting
+        date_metrics = [(datetime.fromisoformat(date_str), date_str, metrics['daily'][date_str]['pageviews']) 
+                       for date_str in metrics['daily']]
+        date_metrics.sort()  # Sort by actual date
+        
+        # Calculate metrics for each day
+        for i, (date_obj, date_str, pageviews) in enumerate(date_metrics):
+            # Calculate rolling 7-day pageviews
+            if i >= 6:  # Need 7 days of data
+                metrics['daily'][date_str]['rolling_7'] = sum(
+                    item[2] for item in date_metrics[i-6:i+1]
+                )
+                
+                # Calculate 7-day growth if we have data from 14 days ago
+                if i >= 13:
+                    previous_7 = sum(item[2] for item in date_metrics[i-13:i-6])
+                    current_7 = metrics['daily'][date_str]['rolling_7']
+                    
+                    if previous_7 > 0:
+                        growth = ((current_7 / previous_7) - 1) * 100
+                        metrics['daily'][date_str]['growth_7'] = round(growth, 2)
+            
+            # Calculate rolling 28-day pageviews
+            if i >= 27:  # Need 28 days of data
+                metrics['daily'][date_str]['rolling_28'] = sum(
+                    item[2] for item in date_metrics[i-27:i+1]
+                )
+                
+                # Calculate 28-day growth if we have data from 56 days ago
+                if i >= 55:
+                    previous_28 = sum(item[2] for item in date_metrics[i-55:i-27])
+                    current_28 = metrics['daily'][date_str]['rolling_28']
+                    
+                    if previous_28 > 0:
+                        growth = ((current_28 / previous_28) - 1) * 100
+                        metrics['daily'][date_str]['growth_28'] = round(growth, 2)
+        
+        return metrics
 
     def _process_country(self, country, start_date, end_date):
         """Process analytics data for a specific country within date range"""
@@ -222,7 +273,7 @@ class AnalyticsProcessor:
         return filtered_docs, filter_errors
 
     def _aggregate_daily_metrics(self, filtered_docs):
-        """Aggregate metrics by day from filtered documents"""
+        """Aggregate pageviews by day from filtered documents"""
         daily_metrics = {}
         
         for data in filtered_docs:
@@ -230,60 +281,69 @@ class AnalyticsProcessor:
                 parsed_timestamp = data['_parsed_timestamp']
                 date_str = parsed_timestamp.date().isoformat()
                 
-                # Initialize metrics for new date
+                # Initialize metrics for new date - simplified to just count pageviews
                 if date_str not in daily_metrics:
                     daily_metrics[date_str] = {
-                        'pageviews': 0,
-                        'visitors': set(),
-                        'total_time': 0
+                        'pageviews': 0
                     }
                 
-                # Count pageview
+                # Count pageview - every document is one pageview
                 daily_metrics[date_str]['pageviews'] += 1
-                
-                # Add visitor ID (handling "null" values)
-                visitor_id = self._get_visitor_id(data)
-                daily_metrics[date_str]['visitors'].add(visitor_id)
-                
-                # Add time on page
-                time_on_page = self._get_time_on_page(data)
-                daily_metrics[date_str]['total_time'] += time_on_page
                 
             except Exception as e:
                 self.log.warning(f"Error processing document: {e}")
         
         return daily_metrics
 
-    def _get_visitor_id(self, data):
-        """Extract visitor ID from document data"""
-        visitor_id = 'unknown'
-        if 'dailyId' in data:
-            if data['dailyId'] != "null" and data['dailyId'] is not None:
-                visitor_id = str(data['dailyId'])
-        return visitor_id
-
-    def _get_time_on_page(self, data):
-        """Extract time on page from document data"""
-        time_on_page = 0
-        if 'timeOnPage' in data:
-            try:
-                if isinstance(data['timeOnPage'], str):
-                    time_on_page = float(data['timeOnPage']) 
-                else:
-                    time_on_page = float(data['timeOnPage'])
-            except (ValueError, TypeError):
-                pass
-        return time_on_page
-
     def _format_metrics_for_storage(self, daily_metrics):
-        """Format daily metrics for storage"""
+        """Format daily metrics for storage with rolling periods and growth"""
         result = {'daily': {}}
-        for date_str, metrics in daily_metrics.items():
+        
+        # Convert daily metrics to array of (date, pageviews) for sorting
+        date_metrics = [(datetime.fromisoformat(date_str), date_str, metrics['pageviews']) 
+                       for date_str, metrics in daily_metrics.items()]
+        date_metrics.sort()  # Sort by actual date
+        
+        # Calculate metrics for each day
+        for i, (date_obj, date_str, pageviews) in enumerate(date_metrics):
             result['daily'][date_str] = {
-                'pageviews': metrics['pageviews'],
-                'unique_visitors': len(metrics['visitors']),
-                'total_time': metrics['total_time']
+                'pageviews': pageviews,
+                'rolling_7': 0,
+                'rolling_28': 0,
+                'growth_7': 0,
+                'growth_28': 0
             }
+            
+            # Calculate rolling 7-day pageviews
+            if i >= 6:  # Need 7 days of data
+                result['daily'][date_str]['rolling_7'] = sum(
+                    item[2] for item in date_metrics[i-6:i+1]
+                )
+                
+                # Calculate 7-day growth if we have data from 14 days ago
+                if i >= 13:
+                    previous_7 = sum(item[2] for item in date_metrics[i-13:i-6])
+                    current_7 = result['daily'][date_str]['rolling_7']
+                    
+                    if previous_7 > 0:
+                        growth = ((current_7 / previous_7) - 1) * 100
+                        result['daily'][date_str]['growth_7'] = round(growth, 2)
+            
+            # Calculate rolling 28-day pageviews
+            if i >= 27:  # Need 28 days of data
+                result['daily'][date_str]['rolling_28'] = sum(
+                    item[2] for item in date_metrics[i-27:i+1]
+                )
+                
+                # Calculate 28-day growth if we have data from 56 days ago
+                if i >= 55:
+                    previous_28 = sum(item[2] for item in date_metrics[i-55:i-27])
+                    current_28 = result['daily'][date_str]['rolling_28']
+                    
+                    if previous_28 > 0:
+                        growth = ((current_28 / previous_28) - 1) * 100
+                        result['daily'][date_str]['growth_28'] = round(growth, 2)
+        
         return result
 
 def main():

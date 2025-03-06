@@ -81,29 +81,98 @@ class DashboardUI {
     console.log("Aggregating country data on frontend");
     const allMetrics = { daily: {} };
 
+    // First collect all dates
+    const allDates = new Set();
+    Object.values(countryData).forEach((country) => {
+      if (!country.daily) return;
+      Object.keys(country.daily).forEach((date) => allDates.add(date));
+    });
+
+    // Initialize all dates with zero values
+    allDates.forEach((date) => {
+      allMetrics.daily[date] = {
+        pageviews: 0,
+        rolling_7: 0,
+        rolling_28: 0,
+        growth_7: 0,
+        growth_28: 0,
+      };
+    });
+
     // Combine data from all countries
     Object.values(countryData).forEach((country) => {
       if (!country.daily) return;
 
       Object.entries(country.daily).forEach(([date, metrics]) => {
-        if (!allMetrics.daily[date]) {
-          allMetrics.daily[date] = {
-            pageviews: 0,
-            unique_visitors: 0,
-            total_time: 0,
-          };
-        }
+        allMetrics.daily[date].pageviews += metrics.pageviews || 0;
 
-        allMetrics.daily[date].pageviews += metrics.pageviews;
-        allMetrics.daily[date].unique_visitors += metrics.unique_visitors;
-        allMetrics.daily[date].total_time += metrics.total_time;
+        // Copy rolling metrics if available (might be calculated by backend)
+        if (metrics.rolling_7)
+          allMetrics.daily[date].rolling_7 += metrics.rolling_7;
+        if (metrics.rolling_28)
+          allMetrics.daily[date].rolling_28 += metrics.rolling_28;
       });
     });
+
+    // Calculate rolling metrics if not provided by backend
+    const datesSorted = Object.keys(allMetrics.daily).sort();
+    if (!allMetrics.daily[datesSorted[0]].rolling_7) {
+      this._calculateRollingMetrics(allMetrics, datesSorted);
+    }
 
     return allMetrics;
   }
 
-  // Add this helper method
+  // Calculate rolling metrics if not provided by backend
+  _calculateRollingMetrics(metrics, datesSorted) {
+    for (let i = 0; i < datesSorted.length; i++) {
+      const date = datesSorted[i];
+
+      // Calculate 7-day rolling if we have enough data
+      if (i >= 6) {
+        let sum7 = 0;
+        for (let j = i - 6; j <= i; j++) {
+          sum7 += metrics.daily[datesSorted[j]].pageviews;
+        }
+        metrics.daily[date].rolling_7 = sum7;
+
+        // Calculate 7-day growth if we have enough data
+        if (i >= 13) {
+          let previousSum7 = 0;
+          for (let j = i - 13; j <= i - 7; j++) {
+            previousSum7 += metrics.daily[datesSorted[j]].pageviews;
+          }
+
+          if (previousSum7 > 0) {
+            metrics.daily[date].growth_7 = (sum7 / previousSum7 - 1) * 100;
+          }
+        }
+      }
+
+      // Calculate 28-day rolling if we have enough data
+      if (i >= 27) {
+        let sum28 = 0;
+        for (let j = i - 27; j <= i; j++) {
+          sum28 += metrics.daily[datesSorted[j]].pageviews;
+        }
+        metrics.daily[date].rolling_28 = sum28;
+
+        // Calculate 28-day growth if we have enough data
+        if (i >= 55) {
+          let previousSum28 = 0;
+          for (let j = i - 55; j <= i - 28; j++) {
+            previousSum28 += metrics.daily[datesSorted[j]].pageviews;
+          }
+
+          if (previousSum28 > 0) {
+            metrics.daily[date].growth_28 = (sum28 / previousSum28 - 1) * 100;
+          }
+        }
+      }
+    }
+  }
+
+  // Show error message
   showError(message) {
     const container = document.getElementById("dashboard-container");
     container.innerHTML = `<div class="error-message">${message}</div>`;
@@ -129,65 +198,65 @@ class DashboardUI {
     `;
 
     this.updateMetricCards(data, yesterdayStr);
-    this.updateCharts(data);
+    this.updateCharts(data, yesterdayStr);
   }
 
   updateMetricCards(data, yesterdayStr) {
     // Get yesterday's metrics
     const yesterdayMetrics = data.daily[yesterdayStr] || {
       pageviews: 0,
-      unique_visitors: 0,
-      total_time: 0,
+      rolling_7: 0,
+      rolling_28: 0,
+      growth_7: 0,
+      growth_28: 0,
     };
 
-    // Calculate both averages
-    const avgTimePerPageview = Math.round(
-      yesterdayMetrics.total_time / yesterdayMetrics.pageviews || 0
-    );
-    const avgTimePerVisitor = Math.round(
-      yesterdayMetrics.total_time / yesterdayMetrics.unique_visitors || 0
-    );
+    // Format growth values with + for positive growth
+    const formatGrowth = (value) => {
+      const prefix = value > 0 ? "+" : "";
+      return `${prefix}${value.toFixed(1)}%`;
+    };
+
+    // Color classes based on growth
+    const growthColorClass = (value) => {
+      if (value > 5) return "text-green-600";
+      if (value < -5) return "text-red-600";
+      return "text-gray-800";
+    };
 
     document.getElementById("pageviews").innerHTML = `
-      <h3 class="text-lg font-semibold mb-2">Pageviews</h3>
-      <p class="text-3xl">${yesterdayMetrics.pageviews}</p>
+      <h3 class="text-lg font-semibold mb-2">Daily Pageviews</h3>
+      <p class="text-3xl">${yesterdayMetrics.pageviews.toLocaleString()}</p>
     `;
 
     document.getElementById("visitors").innerHTML = `
-      <h3 class="text-lg font-semibold mb-2">Unique Visitors</h3>
-      <p class="text-3xl">${yesterdayMetrics.unique_visitors}</p>
+      <h3 class="text-lg font-semibold mb-2">Rolling 7-day</h3>
+      <p class="text-3xl">${yesterdayMetrics.rolling_7.toLocaleString()}</p>
+      <p class="text-xl ${growthColorClass(
+        yesterdayMetrics.growth_7
+      )}">${formatGrowth(yesterdayMetrics.growth_7)}</p>
     `;
 
     document.getElementById("timeOnSite").innerHTML = `
-      <h3 class="text-lg font-semibold mb-2">Avg Time on Site</h3>
-      <div class="space-y-1">
-        <p class="text-xl">Per pageview: ${avgTimePerPageview}s</p>
-        <p class="text-xl">Per visitor: ${avgTimePerVisitor}s</p>
-      </div>
+      <h3 class="text-lg font-semibold mb-2">Rolling 28-day</h3>
+      <p class="text-3xl">${yesterdayMetrics.rolling_28.toLocaleString()}</p>
+      <p class="text-xl ${growthColorClass(
+        yesterdayMetrics.growth_28
+      )}">${formatGrowth(yesterdayMetrics.growth_28)}</p>
     `;
   }
 
-  updateCharts(data) {
-    // Get yesterday's date
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
-
+  updateCharts(data, yesterdayStr) {
     // Filter and sort dates up to yesterday
     const dates = Object.keys(data.daily)
       .filter((date) => date <= yesterdayStr)
       .sort();
 
-    const pageviews = dates.map((date) => data.daily[date].pageviews);
-    const uniqueVisitors = dates.map(
-      (date) => data.daily[date].unique_visitors
-    );
-    const avgTimePerPageview = dates.map((date) =>
-      Math.round(data.daily[date].total_time / data.daily[date].pageviews)
-    );
-    const avgTimePerVisitor = dates.map((date) =>
-      Math.round(data.daily[date].total_time / data.daily[date].unique_visitors)
-    );
+    const pageviews = dates.map((date) => data.daily[date].pageviews || 0);
+    const rolling7day = dates.map((date) => data.daily[date].rolling_7 || 0);
+    const rolling28day = dates.map((date) => data.daily[date].rolling_28 || 0);
+    const growth7day = dates.map((date) => data.daily[date].growth_7 || 0);
+    const growth28day = dates.map((date) => data.daily[date].growth_28 || 0);
 
     // Common layout and config settings
     const layout = {
@@ -202,7 +271,7 @@ class DashboardUI {
       responsive: true,
     };
 
-    // Trend Chart for Pageviews
+    // Daily Pageviews Chart
     Plotly.newPlot(
       "trendChart",
       [
@@ -225,95 +294,98 @@ class DashboardUI {
       config
     );
 
-    // Unique Visitors Chart
+    // Rolling 7-day Chart
     Plotly.newPlot(
       "uniqueVisitorsChart",
       [
         {
           x: dates,
-          y: uniqueVisitors,
+          y: rolling7day,
           type: "scatter",
           mode: "lines+markers",
-          name: "Unique Visitors",
+          name: "7-day Rolling",
           line: { shape: "linear" },
         },
       ],
       {
         ...layout,
         title: {
-          text: "Daily Unique Visitors",
+          text: "7-day Rolling Pageviews",
           y: 0.95,
         },
       },
       config
     );
 
-    // Avg Time Per Pageview Chart
+    // Rolling 28-day Chart
     Plotly.newPlot(
       "avgTimePerPageviewChart",
       [
         {
           x: dates,
-          y: avgTimePerPageview,
+          y: rolling28day,
           type: "scatter",
           mode: "lines+markers",
-          name: "Avg Time/Pageview",
+          name: "28-day Rolling",
           line: { shape: "linear" },
         },
       ],
       {
         ...layout,
         title: {
-          text: "Average Time per Pageview (seconds)",
+          text: "28-day Rolling Pageviews",
           y: 0.95,
         },
       },
       config
     );
 
-    // Avg Time Per Visitor Chart
+    // Growth 7-day Chart
     Plotly.newPlot(
       "avgTimePerVisitorChart",
       [
         {
           x: dates,
-          y: avgTimePerVisitor,
-          type: "scatter",
-          mode: "lines+markers",
-          name: "Avg Time/Visitor",
-          line: { shape: "linear" },
+          y: growth7day,
+          type: "bar",
+          name: "7-day Growth %",
+          marker: {
+            color: growth7day.map((val) =>
+              val > 0 ? "rgba(0, 128, 0, 0.7)" : "rgba(255, 0, 0, 0.7)"
+            ),
+          },
         },
       ],
       {
         ...layout,
         title: {
-          text: "Average Time per Visitor (seconds)",
+          text: "7-day Growth Rate (%)",
           y: 0.95,
         },
       },
       config
     );
 
-    // Growth Chart
-    const growthDates = Object.keys(data.growth).filter(
-      (date) => date <= yesterdayStr
-    );
-    const growthValues = growthDates.map((date) => data.growth[date]);
-
+    // Growth 28-day Chart
     Plotly.newPlot(
       "growthChart",
       [
         {
-          x: growthDates,
-          y: growthValues,
+          x: dates,
+          y: growth28day,
           type: "bar",
-          name: "Growth %",
+          name: "28-day Growth %",
+          marker: {
+            color: growth28day.map((val) =>
+              val > 0 ? "rgba(0, 128, 0, 0.7)" : "rgba(255, 0, 0, 0.7)"
+            ),
+          },
         },
       ],
       {
         ...layout,
         title: {
-          text: "Rolling Growth Rate (%)",
+          text: "28-day Growth Rate (%)",
           y: 0.95,
         },
       },
