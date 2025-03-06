@@ -1,24 +1,36 @@
+import firebase_admin
+from firebase_admin import credentials, firestore
+from datetime import datetime, timedelta
 import logging
 import pytz
-from datetime import datetime, timedelta
-from firebase_admin import firestore
+import sys
 
 class AnalyticsProcessor:
     """Processes raw pageview data into aggregated analytics metrics"""
 
-    def __init__(self, db=None, log=None):
-        """Initialize the analytics processor
-        
-        Args:
-            db: Firestore database client (optional)
-            log: Logger instance (optional)
-        """
+    def __init__(self):
+        """Initialize the analytics processor with Firebase connection and logging"""
         # Set up logging
-        self.log = log or logging.getLogger(__name__)
+        self.log = logging.getLogger(__name__)
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        self.log.addHandler(handler)
+        self.log.setLevel(logging.INFO)
         
-        # Set up database connection
-        self.db = db or firestore.client()
+        # Initialize Firebase if not already initialized
+        if not firebase_admin._apps:
+            try:
+                # Try with service account first
+                cred = credentials.Certificate('keys/firestore_service_account.json')
+                firebase_admin.initialize_app(cred)
+                self.log.info("Initialized Firebase with service account file")
+            except Exception as e:
+                # Fall back to default credentials (for Cloud Run)
+                firebase_admin.initialize_app()
+                self.log.info(f"Initialized Firebase with default credentials: {e}")
         
+        # Get Firestore client
+        self.db = firestore.client()
         self.log.info("Analytics processor initialized")
 
     def process_analytics(self, countries=None, days=30):
@@ -212,7 +224,7 @@ class AnalyticsProcessor:
         if 'timeOnPage' in data:
             try:
                 if isinstance(data['timeOnPage'], str):
-                    time_on_page = float(data['timeOnPage'])
+                    time_on_page = float(data['timeOnPage']) 
                 else:
                     time_on_page = float(data['timeOnPage'])
             except (ValueError, TypeError):
@@ -229,3 +241,15 @@ class AnalyticsProcessor:
                 'total_time': metrics['total_time']
             }
         return result
+
+def main():
+    try:
+        processor = AnalyticsProcessor()
+        processor.process_analytics()
+        print("Analytics processing completed successfully")
+    except Exception as e:
+        print(f"Error processing analytics: {str(e)}")
+        raise e
+
+if __name__ == "__main__":
+    main()
