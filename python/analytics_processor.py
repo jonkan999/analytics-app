@@ -72,16 +72,59 @@ class AnalyticsProcessor:
             timestamp = datetime.now()
             timestamp_str = timestamp.strftime('%Y-%m-%d_%H%M%S')
             
+            # Create an aggregated "all" result from all countries
+            all_metrics = self._aggregate_all_countries(results)
+            
+            # Structure the data in the expected format
+            formatted_results = {
+                'all': all_metrics,
+                'by_country': results
+            }
+            
             # Update the "latest" document to always point to most recent data
             latest_ref = self.db.collection('processed_analytics').document('latest')
             latest_ref.set({
                 'timestamp': timestamp,
-                'data': results
+                'data': formatted_results
             })
             self.log.info(f"Updated 'latest' document with most recent data")
             
         except Exception as e:
             self.log.error(f"Error storing results: {e}")
+
+    def _aggregate_all_countries(self, country_results):
+        """Aggregate metrics from all countries into a single result"""
+        self.log.info("Aggregating metrics from all countries")
+        
+        all_metrics = {'daily': {}}
+        dates_seen = set()
+        
+        # First, collect all dates from all countries
+        for country, result in country_results.items():
+            if 'daily' in result:
+                for date in result['daily'].keys():
+                    dates_seen.add(date)
+        
+        # Initialize metrics for all dates
+        for date in dates_seen:
+            all_metrics['daily'][date] = {
+                'pageviews': 0,
+                'unique_visitors': 0,
+                'total_time': 0
+            }
+        
+        # Aggregate metrics from each country
+        for country, result in country_results.items():
+            if 'daily' not in result:
+                continue
+            
+            for date, metrics in result['daily'].items():
+                all_metrics['daily'][date]['pageviews'] += metrics['pageviews']
+                all_metrics['daily'][date]['unique_visitors'] += metrics['unique_visitors']
+                all_metrics['daily'][date]['total_time'] += metrics['total_time']
+        
+        self.log.info(f"Aggregated metrics for {len(dates_seen)} days across all countries")
+        return all_metrics
 
     def _process_country(self, country, start_date, end_date):
         """Process analytics data for a specific country within date range"""
