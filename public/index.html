@@ -3,9 +3,9 @@
   <head>
     <title>Analytics Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://cdn.plot.ly/plotly-2.30.0/plotly.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.30.0/plotly.min.js"></script>
     <link
       href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
       rel="stylesheet"
@@ -127,16 +127,6 @@
       </div>
     </div>
 
-    <script>
-      // Verify Plotly is loaded before running your module
-      window.onload = function () {
-        if (window.Plotly) {
-          console.log("Plotly loaded successfully");
-        } else {
-          console.error("Plotly failed to load!");
-        }
-      };
-    </script>
     <script type="module" src="/js/analytics-dashboard.js"></script>
   </body>
 </html>

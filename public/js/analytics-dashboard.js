@@ -5,6 +5,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 import { firebaseInit } from "./firebaseConfig.js"; // Adjust the path as needed
 
+// Fix for Plotly access in module
+const Plotly = window.Plotly;
+
 class DashboardUI {
   constructor() {
     this.db = null;
