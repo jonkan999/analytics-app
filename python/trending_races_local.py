@@ -97,10 +97,15 @@ def process_country_data(db, country, country_config, thirty_days_ago_str):
         print(f"{race['domain_name']}: {race['last_30_days_views']} views")
 
 def get_trending_races():
-    # Use default credentials in Cloud Run instead of a service account file
-    if not firebase_admin._apps:
-        # Initialize with default credentials
-        firebase_admin.initialize_app()
+    # Initialize Firebase Admin with service account
+    cred = credentials.Certificate('keys/firestore_service_account.json')
+    
+    # Handle case where app might already be initialized
+    try:
+        firebase_admin.initialize_app(cred)
+    except ValueError:
+        # App already initialized
+        pass
     
     # Initialize Firestore client
     db = firestore.client()
@@ -111,15 +116,8 @@ def get_trending_races():
     
     # Loop through each country configuration
     for country, country_config in CONFIG.items():
-        try:
-            process_country_data(db, country, country_config, thirty_days_ago_str)
-        except Exception as e:
-            print(f"Error processing country {country}: {str(e)}")
+        process_country_data(db, country, country_config, thirty_days_ago_str)
+
 
 if __name__ == "__main__":
-    try:
-        get_trending_races()
-        print("Trending races analysis completed successfully")
-    except Exception as e:
-        print(f"Error in trending races analysis: {str(e)}")
-        raise
+    get_trending_races()
